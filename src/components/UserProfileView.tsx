@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Submission, OlympiadSubmission } from '../types';
 import { store } from '../services/store';
 import { ImageModal } from './ImageModal';
+import { MathView } from './MathView';
 import {
   User as UserIcon,
   Award,
@@ -12,7 +13,9 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Maximize2
+  Maximize2,
+  AlertCircle,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface UserProfileViewProps {
@@ -212,9 +215,9 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ currentUser, o
             {submissions.map((sub) => (
               <div
                 key={sub.id}
-                className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs flex flex-wrap items-center justify-between gap-2"
+                className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-2.5"
               >
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-slate-900">{sub.problemTitle}</span>
                     <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
@@ -222,38 +225,80 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ currentUser, o
                     </span>
                     <span className="text-[10px] font-bold text-slate-500">{sub.points} pts</span>
                   </div>
-                  {sub.reviewReason && (
-                    <p className="text-slate-500 italic text-[11px] mt-0.5">Note: {sub.reviewReason}</p>
-                  )}
-                </div>
 
-                <div className="flex items-center gap-3">
-                  {sub.images && sub.images.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => handleOpenZoom(sub.images, sub.problemTitle)}
-                      className="text-blue-600 hover:text-blue-800 text-[11px] underline flex items-center gap-1 font-semibold"
+                  <div className="flex items-center gap-2.5">
+                    {sub.images && sub.images.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenZoom(sub.images, `Copie - ${sub.problemTitle}`)}
+                        className="text-blue-600 hover:text-blue-800 text-[11px] underline flex items-center gap-1 font-semibold cursor-pointer"
+                      >
+                        <Maximize2 className="w-3 h-3" /> {sub.images.length} photo(s) soumise(s)
+                      </button>
+                    )}
+
+                    <span
+                      className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                        sub.status === 'approved'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          : sub.status === 'rejected'
+                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}
                     >
-                      <Maximize2 className="w-3 h-3" /> {sub.images.length} photo(s)
-                    </button>
-                  )}
-
-                  <span
-                    className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                      sub.status === 'approved'
-                        ? 'bg-emerald-100 text-emerald-800'
+                      {sub.status === 'approved'
+                        ? '✓ Validé'
                         : sub.status === 'rejected'
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {sub.status === 'approved'
-                      ? '✓ Validé'
-                      : sub.status === 'rejected'
-                      ? '✗ Refusé'
-                      : '⏳ En attente'}
-                  </span>
+                        ? '✗ Refusé (Correction possible)'
+                        : '⏳ En attente'}
+                    </span>
+                  </div>
                 </div>
+
+                {/* Admin Explanation / Review feedback with LaTeX */}
+                {sub.reviewReason && (
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-md space-y-1">
+                    <span className="font-bold text-slate-500 text-[10px] uppercase block flex items-center gap-1">
+                      {sub.status === 'rejected' ? (
+                        <>
+                          <AlertCircle className="w-3 h-3 text-rose-600" />
+                          <span className="text-rose-700 font-bold">Raison du refus de l'administrateur :</span>
+                        </>
+                      ) : (
+                        <span>Note du jury :</span>
+                      )}
+                    </span>
+                    <div className="text-slate-800 leading-relaxed text-[11px]">
+                      <MathView content={sub.reviewReason} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin correction photos / diagrams if attached */}
+                {sub.reviewImages && sub.reviewImages.length > 0 && (
+                  <div className="pt-1">
+                    <span className="font-bold text-rose-800 text-[10px] block mb-1 flex items-center gap-1">
+                      <ImageIcon className="w-3 h-3 text-rose-600" />
+                      Schémas / Photos de correction transmis par l'administrateur ({sub.reviewImages.length}) :
+                    </span>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {sub.reviewImages.map((img, rIdx) => (
+                        <div
+                          key={rIdx}
+                          onClick={() => handleOpenZoom(sub.reviewImages || [], `Correction administrateur - ${sub.problemTitle}`)}
+                          className="relative border border-rose-300 rounded-md overflow-hidden cursor-pointer hover:border-rose-500 shrink-0 shadow-2xs group bg-white"
+                        >
+                          <img src={img} alt="Correction" className="h-14 w-20 object-cover" />
+                          <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                            <span className="bg-slate-900/80 text-white text-[9px] px-1 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                              <Maximize2 className="w-2.5 h-2.5" />
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

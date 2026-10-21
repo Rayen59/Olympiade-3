@@ -899,14 +899,18 @@ class StoreService {
   public reviewSubmission(
     subId: string,
     status: 'approved' | 'rejected',
-    reason?: string
+    reason?: string,
+    reviewImages?: string[]
   ): { success?: boolean; error?: string } {
     const sub = this.data.submissions.find((s) => s.id === subId);
     if (!sub) return { error: 'Soumission introuvable.' };
 
     const prevStatus = sub.status;
     sub.status = status;
-    sub.reviewReason = reason || (status === 'approved' ? 'Validé par l’administrateur.' : 'Démonstration incomplète.');
+    sub.reviewReason = reason !== undefined ? reason : (status === 'approved' ? 'Validé par l’administrateur.' : 'Démonstration incomplète.');
+    if (reviewImages !== undefined) {
+      sub.reviewImages = reviewImages;
+    }
     sub.reviewedAt = new Date().toISOString();
 
     const author = this.getUserById(sub.userId);

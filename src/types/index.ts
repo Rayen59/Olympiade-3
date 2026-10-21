@@ -53,6 +53,7 @@ export interface Submission {
   solutionText: string;
   status: SubmissionStatus;
   reviewReason: string | null;
+  reviewImages?: string[];
   submittedAt: string;
   reviewedAt: string | null;
   updatedAt?: string;

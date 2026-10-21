@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, Olympiad, Submission, OlympiadSubmission, Problem, OlympiadTheme, ForumTopic } from '../types';
 import { OLYMPIAD_THEMES } from '../data/problemsData';
 import { store } from '../services/store';
@@ -28,8 +28,27 @@ import {
   Upload,
   FileText,
   Clock,
-  MessageSquare
+  MessageSquare,
+  X,
+  Image as ImageIcon,
+  Send,
+  Eye,
+  EyeOff,
+  Code,
+  Sparkles
 } from 'lucide-react';
+
+const ADMIN_LATEX_SNIPPETS = [
+  { label: 'Fraction', code: '$\\frac{a}{b}$' },
+  { label: 'Puissance', code: '$x^n$' },
+  { label: 'Racine', code: '$\\sqrt{x}$' },
+  { label: 'Différent', code: '$\\neq$' },
+  { label: 'Inégalité', code: '$\\le$' },
+  { label: 'Modulo', code: '$a \\not\\equiv b \\pmod{m}$' },
+  { label: 'Somme', code: '$\\sum_{k=1}^n$' },
+  { label: 'Contre-exemple', code: '$\\exists x \\in \\mathbb{R}$' },
+  { label: 'Système', code: '$$\\begin{cases} a = 1 \\\\ b = 2 \\end{cases}$$' }
+];
 
 interface AdminPanelProps {
   currentUser: User;
@@ -63,6 +82,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]);
+
+  // Rejection Review Modal State (LaTeX explanation & Correction Images)
+  const [rejectingSub, setRejectingSub] = useState<Submission | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>('');
+  const [rejectImages, setRejectImages] = useState<string[]>([]);
+  const [showRejectLatexPreview, setShowRejectLatexPreview] = useState<boolean>(false);
+  const [rejectError, setRejectError] = useState<string | null>(null);
+  const rejectTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Users
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -177,6 +204,74 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
 
   const handleReviewProblemSub = (subId: string, status: 'approved' | 'rejected') => {
     store.reviewSubmission(subId, status);
+  };
+
+  const handleOpenRejectModal = (sub: Submission) => {
+    setRejectingSub(sub);
+    setRejectReason(sub.reviewReason && sub.status === 'rejected' ? sub.reviewReason : '');
+    setRejectImages(sub.reviewImages ? [...sub.reviewImages] : []);
+    setShowRejectLatexPreview(false);
+    setRejectError(null);
+  };
+
+  const handleRejectImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const result = loadEvent.target?.result as string;
+        if (result) {
+          setRejectImages((prev) => [...prev, result]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const insertRejectSnippet = (snippet: string) => {
+    const textarea = rejectTextareaRef.current;
+    if (!textarea) {
+      setRejectReason((prev) => (prev ? prev + ' ' + snippet : snippet));
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const val = textarea.value;
+    const nextVal = val.substring(0, start) + snippet + val.substring(end);
+    setRejectReason(nextVal);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + snippet.length, start + snippet.length);
+    }, 50);
+  };
+
+  const handleConfirmRejection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectingSub) return;
+
+    const hasText = Boolean(rejectReason.trim());
+    const hasImages = rejectImages.length > 0;
+
+    // The user requested: admin can send images and latex text, and not only both at the same time
+    // So either text, or images, or both!
+    if (!hasText && !hasImages) {
+      setRejectError('Veuillez fournir une explication textuelle (LaTeX supporté), joindre au moins une photo/schéma, ou les deux à la fois.');
+      return;
+    }
+
+    store.reviewSubmission(
+      rejectingSub.id,
+      'rejected',
+      rejectReason.trim() || 'Démonstration incorrecte ou incomplète.',
+      rejectImages
+    );
+    setRejectingSub(null);
+    setRejectReason('');
+    setRejectImages([]);
+    reload();
   };
 
   const handleBanUser = (e: React.FormEvent) => {
@@ -824,8 +919,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                     </div>
                   )}
 
+                  {/* Display existing Rejection Feedback if rejected */}
+                  {sub.status === 'rejected' && (sub.reviewReason || (sub.reviewImages && sub.reviewImages.length > 0)) && (
+                    <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-lg text-xs space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-rose-800">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Explication de refus transmise au candidat :</span>
+                      </div>
+                      {sub.reviewReason && (
+                        <div className="text-slate-800 leading-relaxed bg-white p-2.5 rounded border border-rose-100">
+                          <MathView content={sub.reviewReason} />
+                        </div>
+                      )}
+                      {sub.reviewImages && sub.reviewImages.length > 0 && (
+                        <div>
+                          <span className="block text-[10px] font-bold text-rose-700 uppercase mb-1">
+                            Schémas / Photos de correction ({sub.reviewImages.length}) :
+                          </span>
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {sub.reviewImages.map((img, idx) => (
+                              <div
+                                key={idx}
+                                onClick={() => handleOpenZoom(sub.reviewImages || [], `Correction Refus - ${sub.problemTitle}`)}
+                                className="relative border border-rose-200 rounded overflow-hidden cursor-pointer hover:border-rose-400 shrink-0 shadow-2xs"
+                              >
+                                <img src={img} alt="Correction" className="h-16 w-24 object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Review Actions */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[11px] text-slate-400">
                       Validation attribue immédiatement +{sub.points} pts au profil du candidat.
                     </span>
@@ -835,14 +963,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                         <Lock className="w-3.5 h-3.5 text-emerald-600" />
                         <span>Validé & Clôturé Définitivement</span>
                       </span>
-                    ) : (
-                      <div className="flex gap-2">
+                    ) : sub.status === 'rejected' ? (
+                      <div className="flex items-center gap-2 flex-wrap">
                         <button
                           type="button"
-                          onClick={() => handleReviewProblemSub(sub.id, 'rejected')}
-                          className="px-3 py-1.5 text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md transition cursor-pointer"
+                          onClick={() => handleOpenRejectModal(sub)}
+                          className="px-3 py-1.5 text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md transition cursor-pointer flex items-center gap-1"
                         >
-                          Refuser (0 pt - Autoriser nouvelle tentative)
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Modifier l'explication du refus</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReviewProblemSub(sub.id, 'approved')}
+                          className="px-3.5 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-xs transition cursor-pointer"
+                        >
+                          Changer d'avis : Valider (+{sub.points} pts)
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRejectModal(sub)}
+                          className="px-3 py-1.5 text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md transition cursor-pointer flex items-center gap-1.5"
+                        >
+                          <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Refuser & Expliquer l'erreur (LaTeX / Photos)</span>
                         </button>
                         <button
                           type="button"
@@ -1557,6 +1704,205 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
           }
         }}
       />
+
+      {/* ================= REJECTION & CORRECTION FEEDBACK MODAL ================= */}
+      {rejectingSub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="px-5 py-3.5 bg-rose-600 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-rose-200" />
+                <div>
+                  <h3 className="font-bold text-sm">Motif du Refus & Explication Pédagogique</h3>
+                  <span className="text-[11px] text-rose-100 block">
+                    Candidat : <strong>{rejectingSub.username}</strong> • Problème : {rejectingSub.problemTitle}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRejectingSub(null)}
+                className="text-white/80 hover:text-white cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleConfirmRejection} className="p-5 overflow-y-auto flex-1 space-y-4 text-xs">
+              {rejectError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{rejectError}</span>
+                </div>
+              )}
+
+              {/* Informative Guidance */}
+              <div className="p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded-lg space-y-1">
+                <span className="font-bold block">Consigne de correction :</span>
+                <p className="text-[11px] leading-relaxed text-blue-800">
+                  Vous pouvez envoyer à l'utilisateur :
+                  <br />• <strong>Du texte explicatif rédigé en LaTeX</strong> (formules, contre-exemples ou justification),
+                  <br />• <strong>Des photos ou schémas de correction</strong> (correction manuscrite ou figure géométrique),
+                  <br />• <strong>Ou les deux en même temps</strong> (texte + photos). Le candidat recevra ces éléments directement sur sa fiche problème et dans son profil.
+                </p>
+              </div>
+
+              {/* Text explanation with LaTeX */}
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="font-bold text-slate-800">
+                    Raison du refus & Remarques (LaTeX supporté avec <code className="text-blue-600 font-mono">$...$</code> et <code className="text-blue-600 font-mono">$$...$$</code>) :
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowRejectLatexPreview(!showRejectLatexPreview)}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 transition cursor-pointer"
+                  >
+                    {showRejectLatexPreview ? (
+                      <>
+                        <EyeOff className="w-3 h-3" /> Masquer l'aperçu
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-3 h-3" /> Prévisualiser le LaTeX
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* LaTeX Shortcuts */}
+                <div className="flex items-center gap-1.5 flex-wrap bg-slate-50 p-2 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 mr-1">
+                    <Code className="w-3 h-3 text-blue-600" />
+                    Raccourcis :
+                  </span>
+                  {ADMIN_LATEX_SNIPPETS.map((s) => (
+                    <button
+                      key={s.label}
+                      type="button"
+                      onClick={() => insertRejectSnippet(s.code)}
+                      className="px-2 py-0.5 bg-white hover:bg-blue-50 border border-slate-300 hover:border-blue-300 rounded text-[11px] text-slate-700 font-mono transition cursor-pointer"
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  ref={rejectTextareaRef}
+                  rows={4}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Ex: Attention, à la ligne 4 vous divisez par $(x-1)$ sans vérifier que $x \neq 1$. Pour $x=1$, l'égalité donne une contradiction. Voir également le contre-exemple en photo ci-dessous."
+                  className="w-full p-2.5 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none leading-relaxed bg-white"
+                />
+
+                {/* LaTeX live preview */}
+                {showRejectLatexPreview && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Aperçu de la remarque telle que vue par le candidat :
+                    </span>
+                    {rejectReason.trim() ? (
+                      <MathView content={rejectReason} className="text-xs bg-white p-2.5 rounded border border-slate-200" />
+                    ) : (
+                      <p className="text-slate-400 italic">Tapez du texte ou du LaTeX pour voir le rendu instantané.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Photos/Diagrams attachment */}
+              <div className="space-y-1.5 pt-1">
+                <label className="font-bold text-slate-800 block">
+                  Joindre des photos / schémas de correction (Optionnel si vous avez saisi du texte, ou envoyez des photos seules) :
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    id="reject-correction-imgs"
+                    accept="image/*"
+                    multiple
+                    onChange={handleRejectImageUpload}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="reject-correction-imgs"
+                    className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-md border border-slate-300 transition"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-rose-600" />
+                    Ajouter photo(s) de correction
+                  </label>
+
+                  {rejectImages.map((img, idx) => (
+                    <div key={idx} className="relative inline-block border border-rose-200 rounded bg-rose-50 p-1">
+                      <img
+                        src={img}
+                        alt="Correction aperçu"
+                        className="w-12 h-12 object-cover rounded cursor-pointer"
+                        onClick={() => handleOpenZoom(rejectImages, `Correction photo ${idx + 1}`)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRejectImages((prev) => prev.filter((_, i) => i !== idx))}
+                        className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full p-0.5 shadow hover:bg-rose-700"
+                        title="Retirer"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Candidate's submitted work recap for reference */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                <span className="font-bold text-slate-600 block text-[11px] uppercase">
+                  Rappel du travail soumis par le candidat ({rejectingSub.username}) :
+                </span>
+                {rejectingSub.solutionText && (
+                  <div className="max-h-24 overflow-y-auto text-[11px] bg-white p-2 rounded border border-slate-200">
+                    <MathView content={rejectingSub.solutionText} />
+                  </div>
+                )}
+                {rejectingSub.images && rejectingSub.images.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto pt-1">
+                    {rejectingSub.images.map((cImg, cIdx) => (
+                      <div
+                        key={cIdx}
+                        onClick={() => handleOpenZoom(rejectingSub.images, `Copie candidat p.${cIdx + 1}`)}
+                        className="shrink-0 border border-slate-200 rounded overflow-hidden cursor-pointer hover:opacity-80"
+                      >
+                        <img src={cImg} alt="Copie candidat" className="h-12 w-16 object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setRejectingSub(null)}
+                  className="px-3.5 py-1.5 font-semibold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  Confirmer le Refus et Envoyer la Correction
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

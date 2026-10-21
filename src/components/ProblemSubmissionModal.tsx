@@ -32,6 +32,15 @@ export const ProblemSubmissionModal: React.FC<ProblemSubmissionModalProps> = ({
   // Lightbox Zoom state
   const [zoomModalOpen, setZoomModalOpen] = useState(false);
   const [zoomImageIndex, setZoomImageIndex] = useState(0);
+  const [customZoomImages, setCustomZoomImages] = useState<string[] | null>(null);
+  const [customZoomTitle, setCustomZoomTitle] = useState<string>('Polycopie');
+
+  const handleOpenAdminImagesZoom = (imgs: string[], idx: number) => {
+    setCustomZoomImages(imgs);
+    setZoomImageIndex(idx);
+    setCustomZoomTitle(`Correction administrateur - Figure ${idx + 1}`);
+    setZoomModalOpen(true);
+  };
 
   useEffect(() => {
     if (problem && currentUser) {
@@ -237,16 +246,49 @@ export const ProblemSubmissionModal: React.FC<ProblemSubmissionModalProps> = ({
             )}
 
             {isRejected && (
-              <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 text-xs space-y-1">
+              <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 text-xs space-y-2.5">
                 <div className="flex items-center gap-2 font-bold text-rose-800">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                   <span>Soumission précédente refusée / incorrecte</span>
                 </div>
-                <p className="text-slate-700 pl-6 leading-relaxed">
-                  {existingSub.reviewReason
-                    ? `Commentaire de l'administrateur : « ${existingSub.reviewReason} ».`
-                    : "Votre démonstration n'a pas été retenue."}{' '}
-                  <strong>Vous pouvez maintenant soumettre une nouvelle solution</strong> en ajoutant des photos ou en rédigeant un texte LaTeX corrigé.
+
+                {existingSub?.reviewReason && (
+                  <div className="pl-6 space-y-1">
+                    <span className="font-bold text-rose-900 text-[11px] block">
+                      Explication & Remarques de l'administrateur :
+                    </span>
+                    <div className="bg-white p-3 rounded-lg border border-rose-200 text-slate-800 leading-relaxed text-xs shadow-2xs">
+                      <MathView content={existingSub.reviewReason} />
+                    </div>
+                  </div>
+                )}
+
+                {existingSub?.reviewImages && existingSub.reviewImages.length > 0 && (
+                  <div className="pl-6 space-y-1">
+                    <span className="font-bold text-rose-900 text-[11px] block">
+                      Schémas / Photos de correction fournis par l'administrateur ({existingSub.reviewImages.length}) :
+                    </span>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {existingSub.reviewImages.map((img, rIdx) => (
+                        <div
+                          key={rIdx}
+                          onClick={() => handleOpenAdminImagesZoom(existingSub.reviewImages || [], rIdx)}
+                          className="relative border border-rose-300 rounded-lg overflow-hidden cursor-pointer hover:border-rose-500 shrink-0 shadow-2xs group bg-white"
+                        >
+                          <img src={img} alt="Correction administrateur" className="h-20 w-28 object-cover" />
+                          <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                            <span className="bg-slate-900/80 text-white text-[9px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+                              <Maximize2 className="w-2.5 h-2.5" /> Zoom
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-slate-700 pl-6 leading-relaxed text-[11px]">
+                  <strong>Vous pouvez maintenant soumettre une nouvelle solution</strong> ci-dessous en ajustant vos photos ou en rédigeant un texte LaTeX corrigé.
                 </p>
               </div>
             )}
@@ -487,13 +529,16 @@ export const ProblemSubmissionModal: React.FC<ProblemSubmissionModalProps> = ({
         </div>
       </div>
 
-      {/* Lightbox Zoom for polycopies */}
+      {/* Lightbox Zoom for polycopies or admin feedback images */}
       <ImageModal
-        images={images}
+        images={customZoomImages || images}
         initialIndex={zoomImageIndex}
         isOpen={zoomModalOpen}
-        onClose={() => setZoomModalOpen(false)}
-        title={`Polycopie - ${problem.title}`}
+        onClose={() => {
+          setZoomModalOpen(false);
+          setCustomZoomImages(null);
+        }}
+        title={customZoomTitle || `Polycopie - ${problem.title}`}
       />
     </>
   );
