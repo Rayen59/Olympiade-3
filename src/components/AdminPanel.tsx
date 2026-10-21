@@ -167,6 +167,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
   const handleSaveGrade = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeOly || !gradingSub) return;
+    if (activeOly.resultsPublished) {
+      alert("Les résultats de cette olympiade sont ouverts au public. Les notes et les appréciations sont définitivement verrouillées.");
+      return;
+    }
     store.gradeOlympiadSubmission(activeOly.id, gradingSub.id, problemScores, gradingFeedback);
     setGradingSub(null);
   };
@@ -689,9 +693,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                       <button
                         type="button"
                         onClick={() => handleStartGrading(sub)}
-                        className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-xs transition"
+                        className={`px-3.5 py-1.5 text-xs font-bold rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
+                          activeOly.resultsPublished
+                            ? 'bg-slate-700 hover:bg-slate-800 text-white'
+                            : 'bg-blue-700 hover:bg-blue-800 text-white'
+                        }`}
                       >
-                        {sub.status === 'graded' ? 'Modifier la Note' : 'Noter la Copie'}
+                        {activeOly.resultsPublished ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5 text-amber-300" />
+                            <span>Consulter la Note (Verrouillée)</span>
+                          </>
+                        ) : sub.status === 'graded' ? (
+                          'Modifier la Note'
+                        ) : (
+                          'Noter la Copie'
+                        )}
                       </button>
                     </div>
                   </div>
@@ -813,22 +830,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                       Validation attribue immédiatement +{sub.points} pts au profil du candidat.
                     </span>
 
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleReviewProblemSub(sub.id, 'rejected')}
-                        className="px-3 py-1.5 text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md transition"
-                      >
-                        Refuser (0 pt)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReviewProblemSub(sub.id, 'approved')}
-                        className="px-3.5 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-xs transition"
-                      >
-                        Valider (+{sub.points} pts)
-                      </button>
-                    </div>
+                    {sub.status === 'approved' ? (
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Validé & Clôturé Définitivement</span>
+                      </span>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleReviewProblemSub(sub.id, 'rejected')}
+                          className="px-3 py-1.5 text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-md transition cursor-pointer"
+                        >
+                          Refuser (0 pt - Autoriser nouvelle tentative)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReviewProblemSub(sub.id, 'approved')}
+                          className="px-3.5 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md shadow-xs transition cursor-pointer"
+                        >
+                          Valider (+{sub.points} pts & Clôturer)
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -1225,6 +1249,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
               </button>
             </div>
 
+            {/* Alert banner when results are published */}
+            {activeOly.resultsPublished && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs space-y-1">
+                <div className="flex items-center gap-2 font-bold text-amber-900">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Palmarès Ouvert au Public : Notes & Réponses Définitivement Verrouillées</span>
+                </div>
+                <p className="text-slate-700 pl-6 leading-relaxed">
+                  Cette session d'olympiade a ses résultats publiés. En conformité avec les règles d'intégrité du concours, <strong>l'administrateur ne peut plus modifier les notes attribuées ni changer ou répondre aux appréciations</strong> des candidats.
+                </p>
+              </div>
+            )}
+
             <form onSubmit={handleSaveGrade} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 {Array.from({ length: activeOly.problemCount }).map((_, i) => {
@@ -1238,6 +1275,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                         type="number"
                         min={0}
                         max={activeOly.pointsPerProblem}
+                        disabled={activeOly.resultsPublished}
                         value={problemScores[key] ?? 0}
                         onChange={(e) =>
                           setProblemScores((prev) => ({
@@ -1245,7 +1283,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                             [key]: parseInt(e.target.value) || 0
                           }))
                         }
-                        className="w-full p-2 border border-slate-300 rounded font-bold"
+                        className={`w-full p-2 border border-slate-300 rounded font-bold ${
+                          activeOly.resultsPublished
+                            ? 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                            : 'bg-white'
+                        }`}
                       />
                     </div>
                   );
@@ -1258,10 +1300,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                 </label>
                 <textarea
                   rows={3}
+                  disabled={activeOly.resultsPublished}
                   value={gradingFeedback}
                   onChange={(e) => setGradingFeedback(e.target.value)}
                   placeholder="Commentaire de correction..."
-                  className="w-full p-2 border border-slate-300 rounded"
+                  className={`w-full p-2 border border-slate-300 rounded ${
+                    activeOly.resultsPublished
+                      ? 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                      : 'bg-white'
+                  }`}
                 />
               </div>
 
@@ -1269,16 +1316,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
                 <button
                   type="button"
                   onClick={() => setGradingSub(null)}
-                  className="px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded font-semibold"
+                  className="px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded font-semibold cursor-pointer"
                 >
-                  Annuler
+                  {activeOly.resultsPublished ? 'Fermer' : 'Annuler'}
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded shadow-xs"
-                >
-                  Enregistrer la Note & Attribuer Médaille
-                </button>
+                {activeOly.resultsPublished ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-1.5 bg-slate-200 text-slate-500 font-bold rounded shadow-xs cursor-not-allowed flex items-center gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Notes & Réponses Verrouillées</span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded shadow-xs cursor-pointer"
+                  >
+                    Enregistrer la Note & Attribuer Médaille
+                  </button>
+                )}
               </div>
             </form>
           </div>

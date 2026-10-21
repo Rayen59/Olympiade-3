@@ -883,8 +883,72 @@ export const OlympiadsView: React.FC<OlympiadsViewProps> = ({ currentUser, onOpe
                     </div>
                   )}
 
-                  {/* Candidate Form */}
-                  {isExamTimeExpired ? (
+                  {/* Candidate Form or Locked State */}
+                  {mySubmission && mySubmission.status === 'graded' ? (
+                    <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl text-emerald-950 text-xs space-y-3">
+                      <div className="flex items-center gap-2 font-bold text-emerald-900 text-sm">
+                        <Lock className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span>Copie Officiellement Corrigée & Définitivement Verrouillée</span>
+                      </div>
+                      <p className="text-slate-700 leading-relaxed">
+                        L'administrateur a déjà corrigé et noté votre soumission. Conformément au règlement officiel, <strong>vous ne pouvez plus modifier votre copie ni ajouter de photos ou de textes</strong>.
+                      </p>
+
+                      {/* Read-only view of submitted pages */}
+                      {images.length > 0 && (
+                        <div className="pt-2">
+                          <span className="block font-bold text-slate-800 text-[11px] mb-1.5">
+                            Pages transmises ({images.length}) :
+                          </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            {images.map((img, idx) => (
+                              <div
+                                key={idx}
+                                className="group relative border border-slate-200 rounded-xl overflow-hidden bg-slate-100 aspect-4/3 flex items-center justify-center cursor-pointer shadow-2xs hover:border-blue-400"
+                                onClick={() => handleOpenZoom(idx)}
+                              >
+                                <img
+                                  src={img}
+                                  alt={`Page ${idx + 1}`}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition"
+                                />
+                                <span className="absolute top-1 left-1 bg-slate-900/80 text-white text-[9px] px-1.5 py-0.5 rounded font-bold">
+                                  p.{idx + 1}
+                                </span>
+                                <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                                  <span className="p-1.5 bg-white text-slate-900 rounded-full shadow">
+                                    <Maximize2 className="w-3.5 h-3.5" />
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Read-only view of solution notes */}
+                      {solutionNotes.trim() && (
+                        <div className="pt-2">
+                          <span className="block font-bold text-slate-800 text-[11px] mb-1">
+                            Rédaction LaTeX transmise :
+                          </span>
+                          <div className="p-3 bg-white border border-emerald-200 rounded-xl text-xs text-slate-800">
+                            <MathView content={solutionNotes} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : activeOly.resultsPublished ? (
+                    <div className="p-4 bg-slate-100 border border-slate-300 rounded-xl text-slate-800 text-xs flex items-start gap-2.5">
+                      <Lock className="w-5 h-5 shrink-0 mt-0.5 text-slate-600" />
+                      <div>
+                        <span className="font-bold block text-sm">Session Terminée & Résultats Publiés</span>
+                        <p className="mt-0.5">
+                          Les résultats officiels de cette olympiade sont désormais publics. Aucune nouvelle copie ni modification ne peut être acceptée.
+                        </p>
+                      </div>
+                    </div>
+                  ) : isExamTimeExpired ? (
                     <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2.5">
                       <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-rose-600" />
                       <div>

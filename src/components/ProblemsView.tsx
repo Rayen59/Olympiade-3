@@ -17,7 +17,8 @@ import {
   Trash2,
   ShieldAlert,
   Image as ImageIcon,
-  Maximize2
+  Maximize2,
+  Lock
 } from 'lucide-react';
 
 interface ProblemsViewProps {
@@ -372,16 +373,16 @@ export const ProblemsView: React.FC<ProblemsViewProps> = ({ currentUser, onOpenA
                     {sub ? (
                       <div className="flex items-center gap-1.5 text-xs font-semibold">
                         {sub.status === 'approved' ? (
-                          <span className="text-emerald-700 flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Validé (+{sub.points} pts)
+                          <span className="text-emerald-700 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <Lock className="w-3.5 h-3.5" /> Validé & Clôturé (+{sub.points} pts)
                           </span>
                         ) : sub.status === 'rejected' ? (
-                          <span className="text-rose-700 flex items-center gap-1">
-                            <XCircle className="w-3.5 h-3.5" /> Refusé
+                          <span className="text-rose-700 flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                            <XCircle className="w-3.5 h-3.5" /> Refusé (Correction possible)
                           </span>
                         ) : (
-                          <span className="text-amber-700 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" /> En attente de correction
+                          <span className="text-amber-700 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            <Clock className="w-3.5 h-3.5" /> En cours de correction
                           </span>
                         )}
                       </div>
@@ -415,10 +416,37 @@ export const ProblemsView: React.FC<ProblemsViewProps> = ({ currentUser, onOpenA
 
                     <button
                       onClick={() => handleOpenProblem(problem)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0056b3] hover:bg-[#0a3d75] text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg shadow-xs transition cursor-pointer ${
+                        sub?.status === 'approved'
+                          ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                          : sub?.status === 'rejected'
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                          : sub?.status === 'pending'
+                          ? 'bg-slate-700 hover:bg-slate-800 text-white'
+                          : 'bg-[#0056b3] hover:bg-[#0a3d75] text-white'
+                      }`}
                     >
-                      <Send className="w-3.5 h-3.5" />
-                      {sub ? 'Gérer ma Copie' : 'Soumettre'}
+                      {sub?.status === 'approved' ? (
+                        <>
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Voir Copie (Clôturée)</span>
+                        </>
+                      ) : sub?.status === 'rejected' ? (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Corriger / Renvoyer</span>
+                        </>
+                      ) : sub?.status === 'pending' ? (
+                        <>
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Voir Copie (En attente)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Soumettre</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

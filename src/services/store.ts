@@ -416,19 +416,32 @@ class StoreService {
 
     const existingSub = this.data.submissions.find((s) => s.problemId === problem.id && s.userId === user.id);
     if (existingSub) {
-      const isAdminReviewed = existingSub.status !== 'pending' || Boolean(existingSub.reviewedAt);
-      if (isAdminReviewed && existingSub.status !== 'approved') {
+      // Règle : Si l'admin a validé la soumission, elle est définitivement clôturée
+      if (existingSub.status === 'approved') {
         return {
-          error: "L'administrateur a déjà examiné cette copie. La modification n'est permise que si la soumission est validée."
+          error: "Votre solution a déjà été acceptée et validée par l'administrateur. Cette soumission est définitivement clôturée et ne peut plus être modifiée."
         };
       }
 
-      existingSub.images = images;
-      existingSub.imageUrl = images[0] || '';
-      existingSub.solutionText = text;
-      existingSub.updatedAt = new Date().toISOString();
-      this.save();
-      return { success: true, submission: existingSub };
+      // Règle : Si la soumission est en attente, le candidat ne peut pas modifier tant qu'elle n'est pas examinée
+      if (existingSub.status === 'pending') {
+        return {
+          error: "Votre solution est actuellement en attente de correction par l'administrateur. Vous ne pouvez pas la modifier tant qu'elle n'a pas été évaluée."
+        };
+      }
+
+      // Règle : Si la soumission est rejetée (fausse), le candidat est autorisé à renvoyer une nouvelle solution
+      if (existingSub.status === 'rejected') {
+        existingSub.images = images;
+        existingSub.imageUrl = images[0] || '';
+        existingSub.solutionText = text;
+        existingSub.status = 'pending';
+        existingSub.reviewReason = null;
+        existingSub.reviewedAt = null;
+        existingSub.updatedAt = new Date().toISOString();
+        this.save();
+        return { success: true, submission: existingSub };
+      }
     }
 
     const newSub: Submission = {
@@ -673,11 +686,27 @@ class StoreService {
 
     let sub = this.data.olympiadSubmissions.find((s) => s.olympiadId === oly.id && s.userId === user.id);
     if (sub) {
+      // Règle : Un candidat ne peut pas modifier ou ajouter de photos ou de textes après correction par l'admin
+      if (sub.status === 'graded') {
+        return {
+          error: "L'administrateur a déjà corrigé et noté votre copie. Vous ne pouvez plus modifier votre copie ni ajouter de photos ou de texte."
+        };
+      }
+      if (oly.resultsPublished) {
+        return {
+          error: "Les résultats officiels de cette olympiade sont publiés. Aucune modification de copie n'est autorisée."
+        };
+      }
       sub.images = images;
       sub.solutionNotes = notes;
       sub.updatedAt = new Date().toISOString();
       sub.status = 'submitted';
     } else {
+      if (oly.resultsPublished) {
+        return {
+          error: "Les résultats officiels de cette olympiade sont déjà publiés. Les nouvelles participations sont closes."
+        };
+      }
       sub = {
         id: `olysub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         olympiadId: oly.id,
@@ -721,6 +750,13 @@ class StoreService {
   ): { success?: boolean; submission?: OlympiadSubmission; error?: string } {
     const oly = this.getOlympiadById(olyId);
     if (!oly) return { error: 'Olympiade introuvable.' };
+
+    // Règle : Un admin ne peut répondre à un candidat ou changer sa note après qu'il ouvre les résultats
+    if (oly.resultsPublished) {
+      return {
+        error: "Les résultats de cette olympiade ont été ouverts et publiés au public. Les notes et les appréciations/réponses du jury sont définitivement verrouillées et ne peuvent plus être modifiées."
+      };
+    }
 
     const sub = this.data.olympiadSubmissions.find((s) => s.id === subId && s.olympiadId === olyId);
     if (!sub) return { error: 'Soumission introuvable.' };
