@@ -1,0 +1,8 @@
+{
+  "name": "Mémorial Assil Hamdi pour les Mathématiques Avancées",
+  "description": "Portail académique dédié à la diffusion des mathématiques pures, olympiades, cours et défis intellectuels.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
