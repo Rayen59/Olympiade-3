@@ -61,14 +61,78 @@ const DEFAULT_FORUM_TOPICS: ForumTopic[] = [
     category: 'Général',
     authorId: 'usr-admin-1',
     authorName: 'Admin MK',
-    content: `Bienvenue à tous les compétiteurs ! Vous pouvez échanger sur les problèmes, proposer vos conjectures et poser vos questions scientifiques.
+    content: `Bienvenue à tous les compétiteurs et passionnés de mathématiques ! Ce forum académique est ouvert à tous pour échanger sur les problèmes, soumettre vos conjectures et poser vos questions scientifiques.
 
-Pour insérer des formules mathématiques, utilisez les balises :
-- Inline : \`$ x^2 + y^2 = z^2 $\` qui donne $ x^2 + y^2 = z^2 $
-- Centré : \`$$ \\sum_{k=1}^n k = \\frac{n(n+1)}{2} $$\`
-- N’hésitez pas à prévisualiser votre LaTeX et à joindre des schémas manuscrits ou captures d'écran !`,
-    views: 42,
-    createdAt: new Date().toISOString(),
+Pour insérer des formules mathématiques :
+- Formule en ligne : utilisez des dollars simples, par exemple \`$ x^2 + y^2 = z^2 $\` pour afficher $ x^2 + y^2 = z^2 $.
+- Formule centrée en bloc : utilisez des doubles dollars, par exemple \`$$ \\sum_{k=1}^n k = \\frac{n(n+1)}{2} $$\`.
+- Vous pouvez également joindre des photos de démonstrations manuscrites ou de figures géométriques (PNG, JPEG, capture).
+
+N’hésitez pas à prévisualiser votre LaTeX avant de poster !`,
+    views: 84,
+    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+    replies: [
+      {
+        id: 'rep-welcome-1',
+        authorId: 'usr-admin-1',
+        authorName: 'Admin MK',
+        content: `Rappel : tout le monde peut librement consulter les discussions et solutions partagées. Pour poser un nouveau sujet ou répondre, connectez-vous ou créez un compte gratuit en quelques secondes.`,
+        createdAt: new Date(Date.now() - 86400000 * 4).toISOString()
+      }
+    ]
+  },
+  {
+    id: 'topic-nt-1',
+    title: 'Équation diophantienne $3^x - 2^y = 1$ dans les entiers naturels',
+    category: 'Théorie des Nombres',
+    authorId: 'usr-admin-1',
+    authorName: 'Admin MK',
+    content: `On cherche tous les couples $(x, y) \\in \\mathbb{N}^* \\times \\mathbb{N}^*$ vérifiant :
+$$ 3^x - 2^y = 1 $$
+
+Une étude modulo 4 et modulo 8 permet de tester les petites puissances. On remarque facilement les solutions $(1, 1)$ car $3^1 - 2^1 = 1$, et $(2, 3)$ car $3^2 - 2^3 = 9 - 8 = 1$.
+
+Y a-t-il d'autres solutions entières ? Quel argument modulo permet de conclure de manière rigoureuse ?`,
+    views: 65,
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    replies: [
+      {
+        id: 'rep-nt-1',
+        authorId: 'usr-admin-1',
+        authorName: 'Admin MK',
+        content: `Pour $y \\ge 3$, on a $2^y \\equiv 0 \\pmod 8$, ce qui implique $3^x \\equiv 1 \\pmod 8$. Or les puissances de 3 modulo 8 alternent : $3^1 \\equiv 3$, $3^2 \\equiv 1$, donc $x$ doit être pair, posons $x = 2k$.
+Alors $3^{2k} - 1 = (3^k - 1)(3^k + 1) = 2^y$. Deux puissances de 2 différant de 2 sont obligatoirement 2 et 4, d'où $3^k - 1 = 2$ et $3^k + 1 = 4$, ce qui donne $k = 1$ et donc $(x, y) = (2, 3)$. C'est le cas particulier du théorème de Catalan (Mihăilescu) !`,
+        createdAt: new Date(Date.now() - 86400000 * 2).toISOString()
+      }
+    ]
+  },
+  {
+    id: 'topic-geo-1',
+    title: 'Droite d’Euler et relation vectorielle $OH = 3 OG$',
+    category: 'Géométrie',
+    authorId: 'usr-admin-1',
+    authorName: 'Admin MK',
+    content: `Dans un triangle non équilatéral $ABC$, soit $O$ le centre du cercle circonscrit, $G$ le centre de gravité et $H$ l'orthocentre.
+Démontrer que ces trois points sont alignés sur la fameuse « Droite d'Euler » et vérifier la relation :
+$$ \\vec{OH} = 3 \\vec{OG} $$
+Quelles sont vos approches préférées (homothétie de centre $G$ et de rapport $-1/2$, calcul vectoriel ou nombres complexes) ?`,
+    views: 48,
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    replies: []
+  },
+  {
+    id: 'topic-ineq-1',
+    title: 'Inégalité de Cauchy-Schwarz sous forme de Engel (Lemme de Titu)',
+    category: 'Inégalités',
+    authorId: 'usr-admin-1',
+    authorName: 'Admin MK',
+    content: `Pour tous réels $a_1, \\dots, a_n \\in \\mathbb{R}$ et tous réels strictement positifs $b_1, \\dots, b_n > 0$, l'inégalité de Cauchy-Schwarz s'écrit sous forme de Titu :
+$$ \\sum_{i=1}^n \\frac{a_i^2}{b_i} \\ge \\frac{\\left(\\sum_{i=1}^n a_i\\right)^2}{\\sum_{i=1}^n b_i} $$
+Cette forme est redoutable pour démontrer l'inégalité de Nesbitt :
+$$ \\frac{a}{b+c} + \\frac{b}{c+a} + \\frac{c}{a+b} \\ge \\frac{3}{2} $$
+en posant $a_1 = a$, $b_1 = a(b+c)$, etc.`,
+    views: 52,
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
     replies: []
   }
 ];
@@ -110,6 +174,22 @@ class StoreService {
         if (!parsed.olympiads || parsed.olympiads.length === 0) {
           parsed.olympiads = [DEFAULT_OLYMPIAD];
         }
+
+        // CRITICAL: Ensure forum topics are always loaded with default topics if empty
+        if (!Array.isArray(parsed.forumTopics) || parsed.forumTopics.length === 0) {
+          parsed.forumTopics = DEFAULT_FORUM_TOPICS;
+        } else {
+          // Normalize existing topics
+          parsed.forumTopics = parsed.forumTopics.map((t: ForumTopic) => ({
+            ...t,
+            replies: Array.isArray(t.replies) ? t.replies : [],
+            images: Array.isArray(t.images) ? t.images : (t.imageUrl ? [t.imageUrl] : []),
+            views: typeof t.views === 'number' ? t.views : 0,
+            category: t.category || 'Général',
+            createdAt: t.createdAt || new Date().toISOString()
+          }));
+        }
+
         return parsed;
       }
     } catch (e) {
@@ -902,12 +982,15 @@ class StoreService {
   }
 
   public getForumTopicById(id: string): ForumTopic | undefined {
+    return (this.data.forumTopics || []).find((t) => t.id === id);
+  }
+
+  public incrementTopicViews(id: string): void {
     const topic = (this.data.forumTopics || []).find((t) => t.id === id);
     if (topic) {
       topic.views = (topic.views || 0) + 1;
-      this.save();
+      this.saveDirect(this.data);
     }
-    return topic;
   }
 
   public createForumTopic(
@@ -1051,13 +1134,14 @@ class StoreService {
 
   private checkContentSafety(title: string, content: string): { approved: boolean; reason: string } {
     const FORBIDDEN_WORDS = [
-      'spam', 'casino', 'viagra', 'crypto scam', 'plagiat', 'insulte',
-      'connard', 'salaud', 'merde', 'putain', 'idiot', 'imbecile', 'hack',
-      'cheat', 'leak', 'nude', 'porn', 'xxx'
+      'spam', 'casino', 'viagra', 'crypto scam', 'insulte',
+      'connard', 'salaud', 'merde', 'putain', 'idiot', 'imbecile',
+      'nude', 'porn', 'xxx'
     ];
     const text = `${title} ${content}`.toLowerCase();
     for (const w of FORBIDDEN_WORDS) {
-      if (text.includes(w)) {
+      const regex = new RegExp(`(^|\\W)${w}(\\W|$)`, 'i');
+      if (regex.test(text)) {
         return {
           approved: false,
           reason: `Contenu rejeté : terme non autorisé "${w}". Respectez les règles académiques de la plateforme MK Olympiades.`

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ForumTopic, ForumReply, User } from '../types';
 import { store } from '../services/store';
 import { MathView } from './MathView';
@@ -20,7 +20,8 @@ import {
   X,
   Code,
   ShieldAlert,
-  Sparkles
+  Sparkles,
+  Search
 } from 'lucide-react';
 
 interface ForumViewProps {
@@ -41,9 +42,23 @@ const LATEX_SNIPPETS = [
 ];
 
 export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth }) => {
-  const [topics, setTopics] = useState<ForumTopic[]>([]);
+  const [topics, setTopics] = useState<ForumTopic[]>(() => store.getForumTopics());
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Extract initial topic from URL hash if provided (#forum?topic=xyz)
+  const getInitialTopicId = (): string | null => {
+    try {
+      const hash = window.location.hash;
+      const match = hash.match(/[?&]topic=([^&]+)/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]);
+      }
+    } catch {}
+    return null;
+  };
+
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(getInitialTopicId);
 
   // New Topic Modal State
   const [isNewTopicOpen, setIsNewTopicOpen] = useState(false);
@@ -84,7 +99,68 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
     return store.subscribe(reloadTopics);
   }, [selectedCategory]);
 
+  // Sync activeTopicId with URL hash changes (browser back/forward)
+  useEffect(() => {
+    const handleHashSync = () => {
+      try {
+        const hash = window.location.hash;
+        if (hash.startsWith('#forum')) {
+          const match = hash.match(/[?&]topic=([^&]+)/);
+          const topicIdFromHash = match && match[1] ? decodeURIComponent(match[1]) : null;
+          setActiveTopicId((prev) => (prev !== topicIdFromHash ? topicIdFromHash : prev));
+        }
+      } catch {}
+    };
+
+    window.addEventListener('hashchange', handleHashSync);
+    window.addEventListener('popstate', handleHashSync);
+    return () => {
+      window.removeEventListener('hashchange', handleHashSync);
+      window.removeEventListener('popstate', handleHashSync);
+    };
+  }, []);
+
+  const handleSelectTopic = (id: string | null) => {
+    setActiveTopicId(id);
+    if (id) {
+      window.location.hash = `#forum?topic=${encodeURIComponent(id)}`;
+    } else {
+      window.location.hash = '#forum';
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const activeTopic = activeTopicId ? store.getForumTopicById(activeTopicId) : null;
+
+  // Safely increment view count once when entering a topic
+  useEffect(() => {
+    if (activeTopicId && activeTopic) {
+      store.incrementTopicViews(activeTopicId);
+    }
+  }, [activeTopicId]);
+
+  // If topic ID no longer exists (e.g. deleted), revert cleanly to list
+  useEffect(() => {
+    if (activeTopicId && !activeTopic) {
+      handleSelectTopic(null);
+    }
+  }, [activeTopicId, activeTopic]);
+
+  // Filter topics by category and search query
+  const filteredTopics = useMemo(() => {
+    let list = topics.filter(Boolean);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (t) =>
+          (t.title && t.title.toLowerCase().includes(q)) ||
+          (t.content && t.content.toLowerCase().includes(q)) ||
+          (t.authorName && t.authorName.toLowerCase().includes(q)) ||
+          (t.category && t.category.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [topics, searchQuery]);
 
   const handleOpenImageZoom = (imgs: string[], index = 0, title?: string) => {
     if (!imgs || imgs.length === 0) return;
@@ -170,7 +246,7 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
       setNewContent('');
       setNewImages([]);
       setShowNewTopicLatexPreview(false);
-      if (res.topic) setActiveTopicId(res.topic.id);
+      if (res.topic) handleSelectTopic(res.topic.id);
     }
   };
 
@@ -215,7 +291,7 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
       alert(res.error);
     } else {
       if (activeTopicId === topicToDelete.id) {
-        setActiveTopicId(null);
+        handleSelectTopic(null);
       }
       setTopicToDelete(null);
       reloadTopics();
@@ -261,26 +337,48 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
         </button>
       </div>
 
-      {/* Categories Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {['all', 'Général', 'Théorie des Nombres', 'Géométrie', 'Combinatoire', 'Inégalités', 'Équations Fonctionnelles'].map(
-          (cat) => (
+      {/* Categories Bar & Search Input */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none flex-1">
+          {['all', 'Général', 'Théorie des Nombres', 'Géométrie', 'Combinatoire', 'Inégalités', 'Équations Fonctionnelles'].map(
+            (cat) => (
+              <button
+                key={cat}
+                onClick={() => {
+                  setSelectedCategory(cat);
+                  handleSelectTopic(null);
+                }}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-[#0056b3] text-white shadow-xs'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {cat === 'all' ? 'Toutes les catégories' : cat}
+              </button>
+            )
+          )}
+        </div>
+
+        {/* Quick Search in Topics */}
+        <div className="relative min-w-[200px] sm:w-64">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Rechercher formule, sujet..."
+            className="w-full pl-8 pr-7 py-1 text-xs bg-white border border-slate-300 rounded-full focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+          {searchQuery && (
             <button
-              key={cat}
-              onClick={() => {
-                setSelectedCategory(cat);
-                setActiveTopicId(null);
-              }}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
-                selectedCategory === cat
-                  ? 'bg-[#0056b3] text-white shadow-xs'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-              }`}
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
             >
-              {cat === 'all' ? 'Toutes les catégories' : cat}
+              <X className="w-3 h-3" />
             </button>
-          )
-        )}
+          )}
+        </div>
       </div>
 
       {/* DETAIL VIEW OF TOPIC */}
@@ -288,7 +386,7 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
         <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
             <button
-              onClick={() => setActiveTopicId(null)}
+              onClick={() => handleSelectTopic(null)}
               className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" /> Revenir à la liste des discussions
@@ -460,150 +558,183 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
               </p>
             )}
 
-            {/* Reply Form */}
-            <form onSubmit={handleSendReply} className="pt-4 border-t border-slate-200 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-xs font-bold text-slate-800">
-                  Votre Réponse (Texte LaTeX ou Photo ou les deux)
-                </label>
-
-                <div className="flex items-center gap-2">
+            {/* Reply Section: Guest prompt or full Form */}
+            {!currentUser ? (
+              <div className="pt-4 border-t border-slate-200">
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl text-center space-y-2">
+                  <div className="text-xs font-bold text-[#0a3d75] flex items-center justify-center gap-1.5">
+                    <UserIcon className="w-4 h-4 text-blue-600" />
+                    <span>Vous souhaitez répondre ou poser une question sur ce sujet ?</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 max-w-md mx-auto">
+                    La lecture du forum est 100% libre. Pour soumettre une réponse rédigée en LaTeX ou partager une photo de démonstration, connectez-vous ou créez votre compte gratuit.
+                  </p>
                   <button
-                    type="button"
-                    onClick={() => setShowReplyLatexPreview(!showReplyLatexPreview)}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 transition cursor-pointer"
+                    onClick={onOpenAuth}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0056b3] hover:bg-[#0a3d75] text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
                   >
-                    {showReplyLatexPreview ? (
-                      <>
-                        <EyeOff className="w-3 h-3" /> Masquer l'aperçu
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="w-3 h-3" /> Visualiser le LaTeX ($...$)
-                      </>
-                    )}
+                    <UserIcon className="w-3.5 h-3.5" />
+                    Se connecter / Créer un compte
                   </button>
                 </div>
               </div>
-
-              {/* LaTeX quick insert chips */}
-              <div className="flex items-center gap-1.5 flex-wrap bg-slate-50 p-2 rounded-lg border border-slate-200">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 mr-1">
-                  <Code className="w-3 h-3 text-blue-600" />
-                  Raccourcis LaTeX :
-                </span>
-                {LATEX_SNIPPETS.map((s) => (
-                  <button
-                    key={s.label}
-                    type="button"
-                    onClick={() => insertSnippet(s.code, replyTextareaRef, setReplyContent)}
-                    className="px-2 py-0.5 bg-white hover:bg-blue-50 border border-slate-300 hover:border-blue-300 rounded text-[11px] text-slate-700 font-mono transition cursor-pointer"
-                    title={`Insérer ${s.code}`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-
-              {replyError && (
-                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{replyError}</span>
-                </div>
-              )}
-
-              {replySuccess && (
-                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{replySuccess}</span>
-                </div>
-              )}
-
-              <textarea
-                ref={replyTextareaRef}
-                rows={3}
-                value={replyContent}
-                onChange={(e) => setReplyContent(e.target.value)}
-                placeholder="Rédigez votre réponse ici. Vous pouvez utiliser des formules LaTeX ($...$, $$...$$) ou seulement joindre une photo ci-dessous..."
-                className="w-full p-2.5 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none leading-relaxed bg-white"
-              />
-
-              {/* Live LaTeX Visualisation Pane */}
-              {showReplyLatexPreview && (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                    Visualisation LaTeX avant envoi :
-                  </span>
-                  {replyContent.trim() ? (
-                    <MathView content={replyContent} className="text-xs bg-white p-2.5 rounded border border-slate-200" />
-                  ) : (
-                    <p className="text-xs text-slate-400 italic">
-                      Tapez des formules LaTeX ($...$) pour voir le rendu mathématique instantané.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Photos upload & submit row */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="file"
-                    id="forum-reply-imgs"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => handleImageUpload(e, setReplyImages)}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="forum-reply-imgs"
-                    className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md border border-slate-300 transition"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
-                    Joindre photo(s)
+            ) : (
+              <form onSubmit={handleSendReply} className="pt-4 border-t border-slate-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-slate-800">
+                    Votre Réponse (Texte LaTeX ou Photo ou les deux)
                   </label>
 
-                  {/* Image thumbnails */}
-                  {replyImages.map((img, idx) => (
-                    <div key={idx} className="relative inline-block border border-blue-200 rounded bg-blue-50 p-1">
-                      <img
-                        src={img}
-                        alt="Aperçu"
-                        className="w-10 h-10 object-cover rounded cursor-pointer"
-                        onClick={() => handleOpenImageZoom(replyImages, idx, 'Aperçu réponse')}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setReplyImages((prev) => prev.filter((_, i) => i !== idx))}
-                        className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full p-0.5 shadow hover:bg-rose-700"
-                        title="Retirer"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowReplyLatexPreview(!showReplyLatexPreview)}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 transition cursor-pointer"
+                    >
+                      {showReplyLatexPreview ? (
+                        <>
+                          <EyeOff className="w-3 h-3" /> Masquer l'aperçu
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3 h-3" /> Visualiser le LaTeX ($...$)
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* LaTeX quick insert chips */}
+                <div className="flex items-center gap-1.5 flex-wrap bg-slate-50 p-2 rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 mr-1">
+                    <Code className="w-3 h-3 text-blue-600" />
+                    Raccourcis LaTeX :
+                  </span>
+                  {LATEX_SNIPPETS.map((s) => (
+                    <button
+                      key={s.label}
+                      type="button"
+                      onClick={() => insertSnippet(s.code, replyTextareaRef, setReplyContent)}
+                      className="px-2 py-0.5 bg-white hover:bg-blue-50 border border-slate-300 hover:border-blue-300 rounded text-[11px] text-slate-700 font-mono transition cursor-pointer"
+                      title={`Insérer ${s.code}`}
+                    >
+                      {s.label}
+                    </button>
                   ))}
                 </div>
 
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0056b3] hover:bg-[#0a3d75] text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  Envoyer la Réponse
-                </button>
-              </div>
-            </form>
+                {replyError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{replyError}</span>
+                  </div>
+                )}
+
+                {replySuccess && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{replySuccess}</span>
+                  </div>
+                )}
+
+                <textarea
+                  ref={replyTextareaRef}
+                  rows={3}
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  placeholder="Rédigez votre réponse ici. Vous pouvez utiliser des formules LaTeX ($...$, $$...$$) ou seulement joindre une photo ci-dessous..."
+                  className="w-full p-2.5 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none leading-relaxed bg-white"
+                />
+
+                {/* Live LaTeX Visualisation Pane */}
+                {showReplyLatexPreview && (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Visualisation LaTeX avant envoi :
+                    </span>
+                    {replyContent.trim() ? (
+                      <MathView content={replyContent} className="text-xs bg-white p-2.5 rounded border border-slate-200" />
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">
+                        Tapez des formules LaTeX ($...$) pour voir le rendu mathématique instantané.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Photos upload & submit row */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="file"
+                      id="forum-reply-imgs"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => handleImageUpload(e, setReplyImages)}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="forum-reply-imgs"
+                      className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md border border-slate-300 transition"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                      Joindre photo(s)
+                    </label>
+
+                    {/* Image thumbnails */}
+                    {replyImages.map((img, idx) => (
+                      <div key={idx} className="relative inline-block border border-blue-200 rounded bg-blue-50 p-1">
+                        <img
+                          src={img}
+                          alt="Aperçu"
+                          className="w-10 h-10 object-cover rounded cursor-pointer"
+                          onClick={() => handleOpenImageZoom(replyImages, idx, 'Aperçu réponse')}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setReplyImages((prev) => prev.filter((_, i) => i !== idx))}
+                          className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full p-0.5 shadow hover:bg-rose-700"
+                          title="Retirer"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0056b3] hover:bg-[#0a3d75] text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Envoyer la Réponse
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       ) : (
         /* TOPICS LIST */
         <div className="space-y-2.5">
-          {topics.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-xs">
-              Aucun sujet dans cette catégorie. Cliquez sur "Nouveau Sujet" pour lancer une discussion.
+          {filteredTopics.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500 text-xs space-y-2">
+              {searchQuery ? (
+                <>
+                  <p>Aucune discussion ne correspond à votre recherche « <span className="font-bold text-slate-700">{searchQuery}</span> ».</p>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
+                  >
+                    Effacer la recherche
+                  </button>
+                </>
+              ) : (
+                <p>Aucun sujet dans cette catégorie. Cliquez sur "Nouveau Sujet" pour lancer une discussion.</p>
+              )}
             </div>
           ) : (
-            topics.map((t) => {
+            filteredTopics.map((t) => {
               const topicImgs = t.images && t.images.length > 0
                 ? t.images
                 : (t.imageUrl ? [t.imageUrl] : []);
@@ -611,7 +742,8 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
               return (
                 <div
                   key={t.id}
-                  className="bg-white border border-slate-200 hover:border-blue-400 rounded-xl p-4 shadow-xs hover:shadow-sm transition flex flex-col justify-between group"
+                  className="bg-white border border-slate-200 hover:border-blue-400 rounded-xl p-4 shadow-xs hover:shadow-sm transition flex flex-col justify-between group cursor-pointer"
+                  onClick={() => handleSelectTopic(t.id)}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -642,17 +774,11 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
                     </div>
 
                     {/* Title with LaTeX support */}
-                    <div
-                      onClick={() => setActiveTopicId(t.id)}
-                      className="font-bold text-sm text-slate-900 hover:text-blue-700 transition mb-1.5 cursor-pointer"
-                    >
+                    <div className="font-bold text-sm text-slate-900 group-hover:text-blue-700 transition mb-1.5">
                       <MathView content={t.title} />
                     </div>
 
-                    <div
-                      onClick={() => setActiveTopicId(t.id)}
-                      className="text-xs text-slate-500 line-clamp-2 leading-relaxed cursor-pointer"
-                    >
+                    <div className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
                       {t.content ? (
                         t.content.replace(/\$\$[\s\S]*?\$\$/g, '[Formule LaTeX]').replace(/\$[^$\n]+?\$/g, '[LaTeX]')
                       ) : (
@@ -674,13 +800,10 @@ export const ForumView: React.FC<ForumViewProps> = ({ currentUser, onOpenAuth })
                           {topicImgs.length > 1 ? `${topicImgs.length} photos` : 'Photo'}
                         </span>
                       )}
-                      <span>{t.views} vues</span>
-                      <button
-                        onClick={() => setActiveTopicId(t.id)}
-                        className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition cursor-pointer"
-                      >
+                      <span>{t.views ?? 0} vues</span>
+                      <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded group-hover:bg-blue-100 transition">
                         💬 {t.replies ? t.replies.length : 0} réponses
-                      </button>
+                      </span>
                     </div>
                   </div>
                 </div>

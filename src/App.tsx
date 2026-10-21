@@ -10,12 +10,13 @@ import { LeaderboardView } from './components/LeaderboardView';
 import { UserProfileView } from './components/UserProfileView';
 import { AdminPanel } from './components/AdminPanel';
 import { AuthModal } from './components/AuthModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const VALID_TABS: AppTab[] = ['problems', 'olympiads', 'courses', 'forum', 'leaderboard', 'profile', 'admin'];
 
 function getTabFromHash(): AppTab {
   try {
-    const raw = window.location.hash.replace(/^#\/?/, '').split('?')[0].trim();
+    const raw = window.location.hash.replace(/^#\/?/, '').split('?')[0].split('/')[0].trim();
     if (VALID_TABS.includes(raw as AppTab)) {
       return raw as AppTab;
     }
@@ -73,6 +74,12 @@ export const App: React.FC = () => {
   };
 
   const handleGoBack = () => {
+    // If currently inside a forum topic detail (#forum?topic=...), return to main forum list first
+    if (window.location.hash.includes('?topic=')) {
+      window.location.hash = '#forum';
+      return;
+    }
+
     if (historyStack.length > 0) {
       const prevTab = historyStack[historyStack.length - 1];
       setHistoryStack((prev) => prev.slice(0, prev.length - 1));
@@ -89,7 +96,10 @@ export const App: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const canGoBack = historyStack.length > 0 || currentTab !== 'problems';
+  const canGoBack =
+    window.location.hash.includes('?topic=') ||
+    historyStack.length > 0 ||
+    currentTab !== 'problems';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-[#0f172a]">
@@ -110,33 +120,35 @@ export const App: React.FC = () => {
         canGoBack={canGoBack}
       />
 
-      {/* Main Content View */}
+      {/* Main Content View with Error Boundary */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5">
-        {currentTab === 'problems' && (
-          <ProblemsView
-            currentUser={currentUser}
-            onOpenAuth={() => setIsAuthModalOpen(true)}
-          />
-        )}
+        <ErrorBoundary fallbackTitle="Une erreur est survenue lors de l'affichage">
+          {currentTab === 'problems' && (
+            <ProblemsView
+              currentUser={currentUser}
+              onOpenAuth={() => setIsAuthModalOpen(true)}
+            />
+          )}
 
-        {currentTab === 'olympiads' && (
-          <OlympiadsView
-            currentUser={currentUser}
-            onOpenAuth={() => setIsAuthModalOpen(true)}
-            onOpenAdmin={() => handleSelectTab('admin')}
-          />
-        )}
+          {currentTab === 'olympiads' && (
+            <OlympiadsView
+              currentUser={currentUser}
+              onOpenAuth={() => setIsAuthModalOpen(true)}
+              onOpenAdmin={() => handleSelectTab('admin')}
+            />
+          )}
 
-        {currentTab === 'courses' && <CoursesView />}
+          {currentTab === 'courses' && <CoursesView />}
 
-        {currentTab === 'forum' && (
-          <ForumView
-            currentUser={currentUser}
-            onOpenAuth={() => setIsAuthModalOpen(true)}
-          />
-        )}
+          {currentTab === 'forum' && (
+            <ForumView
+              currentUser={currentUser}
+              onOpenAuth={() => setIsAuthModalOpen(true)}
+            />
+          )}
 
-        {currentTab === 'leaderboard' && <LeaderboardView />}
+          {currentTab === 'leaderboard' && <LeaderboardView />}
+        </ErrorBoundary>
 
         {currentTab === 'profile' && currentUser && (
           <UserProfileView

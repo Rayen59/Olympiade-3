@@ -9,7 +9,7 @@ interface MathViewProps {
 
 export const MathView: React.FC<MathViewProps> = ({ content, className = '', inline = false }) => {
   const renderedHtml = useMemo(() => {
-    if (!content) return '';
+    if (!content || typeof content !== 'string') return '';
 
     // If pure math block without delimiters
     if (inline) {
